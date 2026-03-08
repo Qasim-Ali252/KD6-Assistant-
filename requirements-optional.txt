@@ -1,0 +1,18 @@
+# Optional: For voice input (microphone)
+# Install these if you want voice conversation:
+speechrecognition>=3.10.0
+pyaudio>=0.2.13
+
+# Note: On Windows, pyaudio may need manual installation
+# Download from: https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+# Then: pip install PyAudio-0.2.14-cp314-cp314-win_amd64.whl
+
+# Optional: For automation features (browser control, task management)
+# Install these if you want automation capabilities:
+pyautogui>=0.9.54
+
+# Optional: For system control features (volume, brightness)
+# Install these if you want full system control:
+pycaw>=20181226  # Volume control
+comtypes>=1.1.14  # Required by pycaw
+screen-brightness-control>=0.21.0  # Brightness control

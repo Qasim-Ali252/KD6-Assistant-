@@ -1,0 +1,15 @@
+# VTuber-Style Avatar Requirements (Live2D)
+pygame>=2.5.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+pillow>=10.0.0
+
+# For Live2D Cubism SDK (Python wrapper)
+# Note: You'll need to download Live2D Cubism SDK separately
+# We'll use a Python wrapper or direct rendering
+
+# For audio analysis (lip-sync)
+librosa>=0.10.0
+soundfile>=0.12.0
+scipy>=1.11.0
+

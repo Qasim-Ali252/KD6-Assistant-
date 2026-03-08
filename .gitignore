@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+config.json
+memory/storage.json
+memory/*.backup
+memory/*.tmp
+memory/*.corrupted.backup
+*.log
+.DS_Store
+.kiro/
+Allium企划/
