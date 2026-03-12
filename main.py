@@ -3,7 +3,7 @@ import json
 import uuid
 from datetime import datetime
 from perception.camera import CameraPerception
-from perception.microphone import MicrophoneInput
+from perception.microphone_vosk import MicrophoneInputVosk
 from context.builder import ContextBuilder
 from memory.manager import MemoryManager
 from memory.preference_learner import PreferenceLearner
@@ -28,7 +28,7 @@ class KD6Companion:
         
         # Initialize components
         self.camera = CameraPerception(self.config)
-        self.microphone = MicrophoneInput(self.config)
+        self.microphone = MicrophoneInputVosk(self.config)
         self.microphone.start_listening()  # Start listening for voice input
         self.context_builder = ContextBuilder(self.config)
         self.memory = MemoryManager(self.config)
@@ -131,12 +131,12 @@ class KD6Companion:
         
         try:
             while self.running:
-                # 1. PRIORITY CHECK: Get latest speech FIRST (discard old speech)
+                # Get latest speech
                 latest_speech = self.microphone.get_latest_speech()
                 
-                # 2. FAST PATH: Check for automation commands IMMEDIATELY
+                # Check for automation commands
                 if latest_speech:
-                    print(f"⚡ Processing: {latest_speech}")  # Visual feedback
+                    print(f"⚡ Processing: {latest_speech}")
                     command_type, parameters = self.command_executor.parse_intent(latest_speech)
                     
                     # Handle cancellation
@@ -150,6 +150,7 @@ class KD6Companion:
                             'trigger': 'cancel'
                         }
                         self.action_layer.execute(response)
+                        time.sleep(0.01)  # Minimal sleep before next iteration
                         continue
                     
                     # Execute automation commands with HIGHEST PRIORITY
@@ -185,6 +186,7 @@ class KD6Companion:
                         self.memory.add_interaction(context, response)
                         
                         # Continue to next loop iteration immediately
+                        time.sleep(0.01)  # Minimal sleep
                         continue
                     
                     # Handle incomplete YouTube command
@@ -195,28 +197,40 @@ class KD6Companion:
                             'trigger': 'automation_prompt'
                         }
                         self.action_layer.execute(response)
+                        time.sleep(0.01)  # Minimal sleep
                         continue
                 
-                # 3. NORMAL PATH: Regular perception and conversation
+                # Skip expensive operations if no speech and AI is speaking
+                if not latest_speech and self.action_layer.speaking:
+                    time.sleep(0.01)
+                    continue
+                
+                # Get perception data (skip camera entirely for speed)
                 perception_data = {
-                    'camera': self.camera.get_perception(),
-                    'audio': latest_speech  # Use the speech we already got
+                    'camera': {'present': True, 'mood': 'neutral', 'mood_confidence': 0.5},
+                    'audio': latest_speech
                 }
                 
-                # Build context
-                context = self.context_builder.build(perception_data, self.memory)
+                # Build context WITHOUT memory (memory operations are too slow)
+                context = {
+                    'timestamp': datetime.now().isoformat(),
+                    'time': datetime.now().strftime('%I:%M %p'),
+                    'hour': datetime.now().hour,
+                    'user_present': perception_data['camera']['present'],
+                    'mood': perception_data['camera'].get('mood', 'unknown'),
+                    'user_speech': perception_data['audio'],
+                    'recent_memory': [],
+                    'user_preferences': {},
+                    'state_changes': []
+                }
                 
-                # Update emotion state
-                emotion = self.emotion_engine.update(context)
+                # Disable emotion detection and activity inference for speed
+                emotion = {'emotion': 'neutral', 'intensity': 0.5}
+                emotion_history = []
+                activity = 'idle'
                 
-                # Get emotion history for activity inference
-                emotion_history = self.emotion_engine.get_emotion_history(time_window=300)
-                
-                # Infer activity
-                activity = self.decision_engine.infer_activity(emotion_history)
-                
-                # Decision - should AI respond?
-                decision = self.decision_engine.evaluate(context, emotion, self.memory)
+                # Decision - should AI respond? (pass None for memory to avoid slow operations)
+                decision = self.decision_engine.evaluate(context, emotion, None)
                 
                 # Skip user_entered trigger right after startup
                 if self.just_started and decision.get('reason') == 'user_entered':
@@ -225,17 +239,17 @@ class KD6Companion:
                 elif decision['should_respond']:
                     self.just_started = False
                 
-                # Check for proactive triggers (only if not speaking)
-                if not decision['should_respond'] and self.config['decision']['proactive_enabled']:
-                    if not self.action_layer.speaking:
-                        trigger_decision = self.decision_engine.evaluate_triggers(context, emotion_history)
-                        if trigger_decision:
-                            decision = {
-                                'should_respond': True,
-                                'reason': trigger_decision.trigger_type,
-                                'trigger_context': trigger_decision.context
-                            }
-                            self.decision_engine.record_trigger_fired(trigger_decision.trigger_type)
+                # Check for proactive triggers (DISABLED - causes delays)
+                # if not decision['should_respond'] and self.config['decision']['proactive_enabled']:
+                #     if not self.action_layer.speaking:
+                #         trigger_decision = self.decision_engine.evaluate_triggers(context, emotion_history)
+                #         if trigger_decision:
+                #             decision = {
+                #                 'should_respond': True,
+                #                 'reason': trigger_decision.trigger_type,
+                #                 'trigger_context': trigger_decision.context
+                #             }
+                #             self.decision_engine.record_trigger_fired(trigger_decision.trigger_type)
                 
                 if decision['should_respond']:
                     logger.info(f"Decision: {decision['reason']}")
@@ -246,22 +260,22 @@ class KD6Companion:
                     # Get active strategies
                     active_strategies = self.reflection_module.get_active_strategies()
                     
-                    # Generate conversation ID for tracking
+                    # Generate conversation ID
                     conversation_id = str(uuid.uuid4())
                     self.conversation_start_time = time.time()
                     
-                    # Generate response with enhanced context
+                    # Generate response (pass None for memory to avoid slow operations)
                     response = self.conversation.generate(
                         context=context,
                         emotion=emotion,
                         personality=self.personality,
-                        memory=self.memory,
+                        memory=None,
                         trigger=decision['reason'],
                         preference_profile=preference_profile,
                         activity=activity
                     )
                     
-                    # Track conversation for reflection
+                    # Track conversation
                     self.reflection_module.track_conversation(
                         conversation_id=conversation_id,
                         trigger_type=decision['reason'],
@@ -275,27 +289,27 @@ class KD6Companion:
                     # Update memory
                     self.memory.add_interaction(context, response)
                     
-                    # Wait for user response if this was a proactive conversation
-                    if decision['reason'] != 'user_spoke':
-                        # Monitor for user response
-                        self._monitor_user_response(conversation_id, decision['reason'])
+                    # DON'T monitor for user response - it blocks the main loop
+                    # The main loop will naturally pick up the next speech
                 
-                # Check for idle reflection
-                if self.reflection_module.check_idle_reflection():
-                    logger.info("Performing idle reflection...")
-                    report = self.reflection_module.perform_idle_reflection()
-                    self.memory.store_reflection_report(report)
-                    logger.info(f"Reflection complete: {len(report.strategies)} new strategies")
+                # Check for idle reflection (DISABLED FOR DEBUGGING)
+                # if self.reflection_module.check_idle_reflection():
+                #     print(f"🔍 DEBUG: Starting idle reflection at {datetime.now().strftime('%H:%M:%S')}")
+                #     logger.info("Performing idle reflection...")
+                #     report = self.reflection_module.perform_idle_reflection()
+                #     self.memory.store_reflection_report(report)
+                #     logger.info(f"Reflection complete: {len(report.strategies)} new strategies")
+                #     print(f"🔍 DEBUG: Finished idle reflection at {datetime.now().strftime('%H:%M:%S')}")
                 
-                # Check for deep reflection (overnight)
-                current_hour = datetime.now().hour
-                if current_hour == self.config['reflection']['deep_reflection_hour']:
-                    if self.reflection_module.last_deep_reflection is None or \
-                       (datetime.now() - self.reflection_module.last_deep_reflection).days >= 1:
-                        logger.info("Performing deep reflection...")
-                        report = self.reflection_module.perform_deep_reflection()
-                        self.memory.store_reflection_report(report)
-                        logger.info(f"Deep reflection complete")
+                # Check for deep reflection (overnight) (DISABLED FOR DEBUGGING)
+                # current_hour = datetime.now().hour
+                # if current_hour == self.config['reflection']['deep_reflection_hour']:
+                #     if self.reflection_module.last_deep_reflection is None or \
+                #        (datetime.now() - self.reflection_module.last_deep_reflection).days >= 1:
+                #         logger.info("Performing deep reflection...")
+                #         report = self.reflection_module.perform_deep_reflection()
+                #         self.memory.store_reflection_report(report)
+                #         logger.info(f"Deep reflection complete")
                 
                 # Check for task reminders
                 if self.config.get('automation', {}).get('task_reminders_enabled', True):
@@ -304,7 +318,11 @@ class KD6Companion:
                         self.last_reminder_check = now
                         self._check_task_reminders()
                 
-                time.sleep(0.05)  # Reduced from 0.1 to 0.05 for faster response
+                # Adaptive sleep: faster when there might be queued speech
+                if not self.microphone.speech_queue.empty():
+                    time.sleep(0.01)  # Very fast when speech is queued
+                else:
+                    time.sleep(0.05)  # Normal speed otherwise
                 
         except KeyboardInterrupt:
             logger.info("Shutting down...")

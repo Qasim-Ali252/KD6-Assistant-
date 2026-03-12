@@ -43,8 +43,20 @@ class CameraPerception:
             print(f"Warning: Could not initialize emotion detector: {e}")
             self.emotion_detector = None
         
-    def get_perception(self):
-        """Detect presence and estimate mood using emotion detection"""
+    def get_perception(self, skip_detection=False):
+        """Detect presence and estimate mood using emotion detection
+        
+        Args:
+            skip_detection: If True, return cached state without processing frame
+        """
+        # Fast path: return cached state without processing
+        if skip_detection:
+            return {
+                'present': self.user_present,
+                'mood': 'unknown',
+                'mood_confidence': 0.0
+            }
+        
         ret, frame = self.cap.read()
         if not ret or frame is None:
             # Camera error - return not present

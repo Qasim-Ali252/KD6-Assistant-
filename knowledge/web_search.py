@@ -27,11 +27,23 @@ class WebSearchEngine:
         """
         query_lower = user_query.lower()
         
+        # Exclude casual conversation phrases (don't search for these)
+        casual_phrases = [
+            "what's up", "what's on your mind", "how are you", "how's it going",
+            "what are you doing", "what do you think", "what about you",
+            "how's your day", "what's new", "what's going on",
+            "hello", "hi", "hey", "good morning", "good afternoon", "good evening"
+        ]
+        
+        for phrase in casual_phrases:
+            if phrase in query_lower:
+                return False
+        
         # Trigger words that indicate need for search
         search_triggers = [
             'what is', 'what are', 'who is', 'who are',
             'when did', 'when was', 'when will',
-            'how to', 'how do', 'how does',
+            'how to', 'how do', 'how does', 'how can i',
             'why is', 'why are', 'why did',
             'where is', 'where are', 'where can',
             'latest', 'current', 'recent', 'today',
@@ -51,8 +63,12 @@ class WebSearchEngine:
             if trigger in query_lower:
                 return True
         
+        # Don't search for very short queries (likely greetings)
+        if len(user_query.split()) < 3:
+            return False
+        
         # Check for question marks (likely a question)
-        if '?' in user_query:
+        if '?' in user_query and len(user_query.split()) >= 3:
             return True
         
         return False

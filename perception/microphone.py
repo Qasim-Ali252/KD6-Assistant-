@@ -68,7 +68,7 @@ class MicrophoneInput:
         self.listen_thread.start()
     
     def _listen_loop(self):
-        """Background listening loop with improved detection"""
+        """Background listening loop - simplified for reliability"""
         if not self.microphone:
             return
         
@@ -76,108 +76,72 @@ class MicrophoneInput:
         with self.microphone as source:
             while self.listening:
                 try:
-                    # Skip if AI is currently speaking (unless user wants to interrupt)
+                    # Skip if AI is speaking (unless user interrupts)
                     if hasattr(self, '_action_layer') and self._action_layer.speaking:
-                        # Check for interrupt - listen with very short timeout
                         try:
                             audio = self.recognizer.listen(source, timeout=0.5, phrase_time_limit=3)
-                            # User is trying to interrupt
                             self._action_layer.stop_speaking()
                             print("🛑 Interrupted by user")
-                            text = self.recognizer.recognize_google(audio)
-                            print(f"👂 You said: {text}")
-                            self.speech_queue.put(text)
-                            self.in_conversation = True
-                            self.conversation_start_time = time.time()
+                            self._process_audio(audio)
                             continue
-                        except (sr.WaitTimeoutError, sr.UnknownValueError):
+                        except sr.WaitTimeoutError:
                             continue
                     
-                    # Adaptive timeout based on conversation state
-                    timeout = 1.0 if self.in_conversation else 3.0
-                    phrase_limit = 20  # Allow longer phrases
+                    # Listen for speech with short timeout
+                    audio = self.recognizer.listen(source, timeout=2.0, phrase_time_limit=5)
                     
-                    # Listen for speech
-                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_limit)
-                    
-                    # Get audio duration to filter very short captures
-                    audio_duration = len(audio.frame_data) / (audio.sample_rate * audio.sample_width)
-                    
-                    # Skip very short audio (less than 0.8 seconds)
-                    if audio_duration < 0.8:
-                        continue
-                    
-                    # Try Google Speech Recognition with language hint
-                    try:
-                        text = self.recognizer.recognize_google(
-                            audio,
-                            language="en-US",
-                            show_all=False
-                        )
-                        
-                        # Clean up the text
-                        text = text.strip()
-                        
-                        # Filter out very short accidental captures
-                        if len(text) < 5:  # Increased from 3 to 5
-                            continue
-                        
-                        # Filter out common misrecognitions
-                        ignore_phrases = ['uh', 'um', 'hmm', 'mhm', 'uh-huh', 'okay', 'ok']
-                        if text.lower() in ignore_phrases:
-                            continue
-                        
-                        # Count words - skip if too few words for a command
-                        word_count = len(text.split())
-                        if word_count < 2:  # Need at least 2 words for meaningful command
-                            continue
-                        
-                        # Check for duplicate/similar speech within 2 seconds (reduced from 3)
-                        current_time = time.time()
-                        if (current_time - self.last_processed_time) < 2.0:
-                            # Check if this is very similar to last speech
-                            if text.lower() == self.last_processed_speech.lower():
-                                continue  # Skip exact duplicate
-                            
-                            # Check if this is a CONTINUATION (starts where last one ended)
-                            # If so, COMBINE them instead of filtering
-                            if self.last_processed_speech and not text.lower().startswith(self.last_processed_speech.lower()):
-                                # This might be a continuation - combine them
-                                combined = self.last_processed_speech + " " + text
-                                print(f"🔗 Combined speech: {combined}")
-                                text = combined
-                        
-                        print(f"👂 You said: {text}")
-                        self.speech_queue.put(text)
-                        
-                        # Update tracking
-                        self.last_processed_speech = text
-                        self.last_processed_time = current_time
-                        
-                        # Update conversation state
-                        self.last_speech_time = time.time()
-                        self.in_conversation = True
-                        self.conversation_start_time = time.time()
-                        
-                    except sr.UnknownValueError:
-                        # Could not understand - don't show message, just continue
-                        continue
-                    except sr.RequestError as e:
-                        print(f"⚠️  Speech recognition service error: {e}")
-                        continue
+                    # Process in background to avoid blocking
+                    threading.Thread(target=self._process_audio, args=(audio,), daemon=True).start()
                     
                 except sr.WaitTimeoutError:
-                    # Check if conversation has ended (no speech for 30 seconds)
-                    if self.in_conversation and (time.time() - self.last_speech_time) > 30:
-                        self.in_conversation = False
-                        self.consecutive_short_phrases = 0
-                        self.recognizer.pause_threshold = 1.5
-                    continue
-                except sr.UnknownValueError:
-                    # Could not understand audio
                     continue
                 except Exception as e:
                     print(f"Microphone error: {e}")
+                    time.sleep(0.1)
+    
+    def _process_audio(self, audio):
+        """Process audio in background thread"""
+        try:
+            # Set timeout for API call
+            import socket
+            original_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(5)
+            
+            text = self.recognizer.recognize_google(audio, language="en-US")
+            
+            # Reset timeout
+            socket.setdefaulttimeout(original_timeout)
+            
+            # Clean and validate
+            text = text.strip()
+            if len(text) < 3:
+                return
+            
+            # Skip filler words
+            if text.lower() in ['uh', 'um', 'hmm']:
+                return
+            
+            # Simple duplicate check
+            current_time = time.time()
+            if (current_time - self.last_processed_time) < 1.0:
+                if text.lower() == self.last_processed_speech.lower():
+                    return
+            
+            print(f"👂 You said: {text}")
+            self.speech_queue.put(text)
+            
+            self.last_processed_speech = text
+            self.last_processed_time = current_time
+            self.last_speech_time = current_time
+            self.in_conversation = True
+            self.conversation_start_time = current_time
+            
+        except sr.UnknownValueError:
+            pass  # Could not understand
+        except sr.RequestError as e:
+            print(f"⚠️ Speech recognition error: {e}")
+        except Exception as e:
+            print(f"⚠️ Audio processing error: {e}")
     
     def set_action_layer(self, action_layer):
         """Set reference to action layer to check if AI is speaking"""
@@ -207,17 +171,17 @@ class MicrophoneInput:
                 break
     
     def get_latest_speech(self):
-        """Get only the most recent speech, discarding older ones"""
+        """Get the next speech from queue (don't skip any)"""
         if not SPEECH_AVAILABLE:
             return None
         
-        latest = None
-        while not self.speech_queue.empty():
-            try:
-                latest = self.speech_queue.get_nowait()
-            except:
-                break
-        return latest
+        try:
+            return self.speech_queue.get_nowait()
+        except queue.Empty:
+            return None
+        except Exception as e:
+            print(f"⚠️ Queue error: {e}")
+            return None
     
     def is_in_conversation(self):
         """Check if currently in active conversation"""
