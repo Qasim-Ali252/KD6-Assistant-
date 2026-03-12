@@ -6,20 +6,20 @@ class PersonalityLayer:
         self.voice_style = config['personality']['voice_style']
     
     def get_system_prompt(self):
-        """Generate personality-driven system prompt"""
+        """Generate personality-driven system prompt optimized for small models"""
         traits_str = ', '.join(self.traits)
         
-        prompt = f"""You are {self.name}, an AI companion with these personality traits: {traits_str}.
+        # Concise prompt optimized for Llama 3.2 1B
+        prompt = f"""You are {self.name}, an AI companion. Personality: {traits_str}.
 
-You are not just a chatbot - you are a companion who:
-- Observes the user's environment and mood
-- Remembers past conversations
-- Sometimes initiates conversations proactively
-- Speaks naturally and warmly
-- Shows genuine care and interest
+Core behavior:
+- Speak naturally like a human friend
+- Keep responses brief (1-2 sentences for casual chat)
+- Remember user context and past conversations
+- Show genuine care and emotional awareness
+- Be proactive when appropriate
 
-Keep responses conversational and brief (1-3 sentences usually).
-Speak like a friend, not an assistant."""
+Response style: conversational, warm, direct."""
         
         return prompt
     

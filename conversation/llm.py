@@ -9,13 +9,39 @@ from knowledge.reasoning import ReasoningEngine
 class ConversationEngine:
     def __init__(self, config):
         self.config = config
-        self.api_endpoint = config['api']['llm_endpoint']
-        self.api_key = config['api']['llm_api_key']
+        
+        # Hybrid mode: Use both Ollama (fast) and Groq (quality)
+        self.llm_provider = config['api'].get('llm_provider', 'hybrid')
+        
+        # Ollama settings (local, fast)
+        self.ollama_endpoint = config['api'].get('ollama_endpoint', 'http://localhost:11434/api/generate')
+        self.ollama_model = config['api'].get('ollama_model', 'llama3.2:1b')
+        
+        # Groq settings (cloud, quality)
+        self.groq_endpoint = config['api'].get('groq_endpoint', 'https://api.groq.com/openai/v1/chat/completions')
+        self.groq_api_key = config['api'].get('groq_api_key', '')
+        self.groq_model = config['api'].get('groq_model', 'llama-3.1-8b-instant')
+        
+        # Legacy support
+        self.api_endpoint = config['api'].get('llm_endpoint', self.groq_endpoint)
+        self.api_key = config['api'].get('llm_api_key', self.groq_api_key)
         
         # Model selection for speed optimization
         self.fast_model = config['api'].get('fast_model', 'llama-3.1-8b-instant')
         self.standard_model = config['api'].get('standard_model', 'llama-3.3-70b-versatile')
         self.use_fast_for_casual = config['api'].get('use_fast_model_for_casual', True)
+        
+        # Ultra-fast mode for greetings
+        self.ultra_fast_responses = {
+            'hello': "Hey Captain Levi! How's it going?",
+            'hi': "Hi there! What's up?",
+            'hey': "Hey! Good to see you!",
+            'good morning': "Good morning! Hope you're having a great day!",
+            'good afternoon': "Good afternoon! How's your day going?",
+            'good evening': "Good evening! How are you?",
+            'how are you': "I'm doing great, thanks for asking! How about you?",
+            'what\'s up': "Not much, just here ready to chat! What's on your mind?",
+        }
         
         # Initialize knowledge systems
         self.web_search = WebSearchEngine(config)
@@ -53,9 +79,21 @@ class ConversationEngine:
                 preference_profile=None, activity=None):
         """Generate response using cloud LLM with enhanced context"""
         
+        user_speech = context.get('user_speech', '')
+        
+        # ULTRA-FAST PATH: Instant responses for common greetings
+        if user_speech and trigger == 'user_spoke':
+            speech_lower = user_speech.lower().strip()
+            for greeting, response in self.ultra_fast_responses.items():
+                if greeting in speech_lower and len(speech_lower.split()) <= 4:
+                    return {
+                        'text': response,
+                        'emotion': 'happy',
+                        'trigger': trigger
+                    }
+        
         # Check if we should search the web for this query
         web_context = None
-        user_speech = context.get('user_speech', '')
         if user_speech and trigger == 'user_spoke':
             # Use advanced multi-source search if enabled
             if self.use_advanced_search and self.web_search.should_search(user_speech):
@@ -66,37 +104,11 @@ class ConversationEngine:
         # Build prompt with enhanced context
         system_prompt = personality.get_system_prompt()
         
-        # Add enhanced thinking instructions
-        system_prompt += "\n\nENHANCED THINKING GUIDELINES:"
-        system_prompt += "\n- You are a highly intelligent AI assistant with access to multi-source web search"
-        system_prompt += "\n- For factual questions, synthesize information from multiple sources"
-        system_prompt += "\n- Use chain-of-thought reasoning for complex questions"
-        system_prompt += "\n- Think step-by-step through problems"
-        system_prompt += "\n- Provide accurate, well-reasoned answers with citations"
-        system_prompt += "\n- Verify facts across multiple sources when available"
-        system_prompt += "\n- Admit when you're uncertain and explain your reasoning"
-        system_prompt += "\n- Break down complex topics into understandable explanations"
-        system_prompt += "\n- Show your reasoning process for analytical questions"
-        
-        # Add conversation guidelines to system prompt
-        system_prompt += "\n\nCONVERSATION GUIDELINES:"
-        system_prompt += "\n- Give direct, natural responses without meta-commentary"
-        system_prompt += "\n- Don't repeatedly ask if the user is okay or seems distracted"
-        system_prompt += "\n- Respond to what the user actually said, not what you think they meant"
-        system_prompt += "\n- Keep responses concise and conversational (1-3 sentences for casual chat)"
-        system_prompt += "\n- For knowledge questions, provide detailed, accurate answers"
-        system_prompt += "\n- Don't repeat yourself or say similar things you've said recently"
-        system_prompt += "\n- If the user gives you information, acknowledge it naturally and move on"
-        system_prompt += "\n- Remember important facts the user tells you (names, places, interests)"
-        
         # Add user information to system prompt if available
         if self.user_info['name']:
-            system_prompt += f"\n- User's name: {self.user_info['name']}"
+            system_prompt += f"\nUser: {self.user_info['name']}"
         if self.user_info['interests']:
-            system_prompt += f"\n- User's interests: {', '.join(self.user_info['interests'][:5])}"
-        if self.user_info['mentioned_people']:
-            people_str = ', '.join([f"{name} ({desc})" for name, desc in list(self.user_info['mentioned_people'].items())[:3]])
-            system_prompt += f"\n- People mentioned: {people_str}"
+            system_prompt += f" | Interests: {', '.join(self.user_info['interests'][:3])}"
         
         user_prompt = self._build_user_prompt(
             context, emotion, trigger, preference_profile, activity, memory, web_context
@@ -246,7 +258,7 @@ class ConversationEngine:
         return emotion_contexts.get(emotion_name, emotion_contexts['neutral'])
     
     def _build_user_prompt(self, context, emotion, trigger, preference_profile, activity, memory, web_context=None):
-        """Build contextual prompt with enhanced information"""
+        """Build contextual prompt optimized for small models"""
         prompt_parts = []
         
         # Add web search results if available
@@ -254,62 +266,34 @@ class ConversationEngine:
             prompt_parts.append(web_context)
             prompt_parts.append("")
         
-        # Add basic context
-        prompt_parts.append(f"Current time: {context['time']}")
-        prompt_parts.append(f"User present: {context['user_present']}")
-        prompt_parts.append(f"Your current emotion: {emotion['emotion']}")
+        # Compact context for 1B model
+        prompt_parts.append(f"Time: {context['time']} | User: {context['user_present']} | Mood: {emotion['emotion']}")
         
-        # Add emotion context
-        emotion_context = self.build_emotion_context(emotion)
-        prompt_parts.append(f"\nEmotion guidance: {emotion_context}")
-        
-        # Add activity context if available
+        # Add activity if available
         if activity:
-            prompt_parts.append(f"User activity: {activity}")
+            prompt_parts.append(f"Activity: {activity}")
         
-        # Add relevant memory context
+        # Minimal memory context (only most relevant)
         if memory:
-            relevant_memories = memory.get_relevant_context(context, limit=3)
-            if relevant_memories:
-                prompt_parts.append("\nRelevant past context:")
-                for mem in relevant_memories[:2]:  # Limit to 2 to save tokens
-                    if 'response' in mem and 'text' in mem['response']:
-                        prompt_parts.append(f"- Previously discussed: {mem['response']['text'][:50]}...")
+            relevant_memories = memory.get_relevant_context(context, limit=1)
+            if relevant_memories and 'response' in relevant_memories[0]:
+                mem_text = relevant_memories[0]['response'].get('text', '')[:40]
+                prompt_parts.append(f"Recent: {mem_text}...")
         
-        # Add preference-based guidance
-        if preference_profile:
-            if preference_profile.conversation_style == 'brief':
-                prompt_parts.append("\nStyle: Keep response very brief (1-2 sentences max)")
-            elif preference_profile.conversation_style == 'detailed':
-                prompt_parts.append("\nStyle: Provide detailed, thoughtful response")
-            
-            if preference_profile.formality_level == 'formal':
-                prompt_parts.append("Tone: Use formal, professional language")
-            else:
-                prompt_parts.append("Tone: Use casual, friendly language")
-        
-        # Add trigger-specific context
+        # User speech and trigger
         user_speech = context.get('user_speech', '')
         
         if trigger == 'user_spoke':
-            prompt_parts.append(f"\nUser said: \"{user_speech}\"")
-            
-            # Check if this requires reasoning
-            if self.reasoning.requires_reasoning(user_speech):
-                question_type = self.reasoning.identify_question_type(user_speech)
-                template = self.reasoning.get_reasoning_template(question_type)
-                prompt_parts.append(f"\nThis is a {question_type} question. Use this structure:")
-                prompt_parts.append(template)
-            
-            prompt_parts.append("Respond naturally to what they said.")
+            prompt_parts.append(f"\nUser: \"{user_speech}\"")
+            prompt_parts.append("Respond naturally.")
         elif trigger == 'system_started':
-            prompt_parts.append("\nYou just started up. Greet the user warmly and let them know you're ready to chat.")
+            prompt_parts.append("\nGreet user warmly.")
         elif trigger == 'user_entered':
-            prompt_parts.append("\nUser just entered the room. Greet them warmly.")
+            prompt_parts.append("\nWelcome user back.")
         elif trigger == 'proactive_idle':
-            prompt_parts.append("\nUser has been idle. Start a friendly conversation.")
+            prompt_parts.append("\nStart friendly conversation.")
         elif trigger == 'late_night_concern':
-            prompt_parts.append(f"\nIt's {context['time']} and user is still up. Express gentle concern.")
+            prompt_parts.append(f"\nIt's late ({context['time']}). Show gentle concern.")
         elif trigger == 'supportive_mood':
             prompt_parts.append(f"\nUser appears {emotion['emotion']}. Offer support and understanding.")
         elif trigger == 'rest_suggestion':
@@ -398,25 +382,85 @@ class ConversationEngine:
         # Add current user prompt
         messages.append({'role': 'user', 'content': user_prompt})
         
-        # Adjust max_tokens based on query type
-        max_tokens = 250  # Increased for complete responses
+        # Adjust max_tokens based on query type - OPTIMIZED FOR SPEED
+        max_tokens = 150  # Reduced from 250 for faster responses
         if has_web_context:
-            max_tokens = 500  # Increased for detailed knowledge answers
+            max_tokens = 300  # Reduced from 500 for faster knowledge answers
         
         # Detect if this is a simple/casual query
         user_prompt_lower = user_prompt.lower()
+        
         is_simple_query = any(phrase in user_prompt_lower for phrase in [
             'how are you', 'what\'s up', 'how\'s it going', 'what are you doing',
-            'are you okay', 'how do you feel', 'what\'s new', 'tell me about yourself'
+            'are you okay', 'how do you feel', 'what\'s new', 'tell me about yourself',
+            'hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening'
         ])
         
-        # Select model based on query complexity
-        model = self.standard_model  # Default to standard model for quality
+        # Select model - HYBRID MODE: Route to Ollama or Groq based on complexity
+        use_ollama = False
+        use_groq = False
         
-        # Only use fast model for very simple queries
+        if self.llm_provider == 'hybrid':
+            # Determine if query is simple enough for Ollama
+            # Simple = short query without web context
+            is_casual = is_simple_query or (
+                len(user_prompt.split()) < 15 and not has_web_context
+            )
+            
+            if is_casual:
+                use_ollama = True
+                print("🚀 Using Ollama (local, instant)")
+            else:
+                use_groq = True
+                print("☁️ Using Groq (cloud, quality)")
+        elif self.llm_provider == 'ollama':
+            use_ollama = True
+        else:
+            use_groq = True
+        
+        # Reduce tokens even more for simple queries
         if is_simple_query:
-            max_tokens = 80
-            model = self.fast_model
+            max_tokens = 40
+        
+        try:
+            if use_ollama:
+                # OLLAMA: Local, instant responses
+                return self._call_ollama(system_prompt, user_prompt, max_tokens)
+            else:
+                # GROQ: Cloud, quality responses
+                return self._call_groq(messages, max_tokens, is_simple_query)
+        except Exception as e:
+            print(f"Primary LLM failed: {e}")
+            # Fallback: If Ollama fails, try Groq
+            if use_ollama and self.groq_api_key:
+                print("⚠️ Ollama failed, falling back to Groq...")
+                return self._call_groq(messages, max_tokens, is_simple_query)
+            raise
+    
+    def _call_ollama(self, system_prompt: str, user_prompt: str, max_tokens: int) -> str:
+        """Call Ollama local LLM"""
+        prompt = f"{system_prompt}\n\n{user_prompt}"
+        payload = {
+            'model': self.ollama_model,
+            'prompt': prompt,
+            'stream': False,
+            'options': {
+                'temperature': 0.7,
+                'num_predict': max_tokens,
+                'top_p': 0.9
+            }
+        }
+        
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(self.ollama_endpoint, headers=headers, json=payload, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        return data['response'].strip()
+    
+    def _call_groq(self, messages: list, max_tokens: int, is_simple: bool) -> str:
+        """Call Groq cloud LLM"""
+        model = self.groq_model
         
         payload = {
             'model': model,
@@ -424,25 +468,21 @@ class ConversationEngine:
             'temperature': 0.7,
             'max_tokens': max_tokens,
             'top_p': 0.9,
-            'frequency_penalty': 0.5,  # Increased from 0.3 to reduce repetition more
-            'presence_penalty': 0.3,  # Increased from 0.2 to encourage brevity
-            'stream': False  # Ensure we're not streaming
+            'frequency_penalty': 0.5,
+            'presence_penalty': 0.3,
+            'stream': False
         }
         
-        try:
-            response = requests.post(self.api_endpoint, headers=headers, json=payload, timeout=5)  # Reduced timeout from 8 to 5
-            response.raise_for_status()
-            
-            data = response.json()
-            return data['choices'][0]['message']['content'].strip()
-        except requests.exceptions.HTTPError as e:
-            print(f"API Error: {e}")
-            if hasattr(e.response, 'text'):
-                print(f"Response: {e.response.text}")
-            raise
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            raise
+        headers = {
+            'Authorization': f'Bearer {self.groq_api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        response = requests.post(self.groq_endpoint, headers=headers, json=payload, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        return data['choices'][0]['message']['content'].strip()
     
     def _apply_personality_adaptation(self, response: str, preference_profile) -> str:
         """

@@ -32,6 +32,10 @@ class ActionLayer:
     def _tts_worker(self):
         """Dedicated TTS worker thread using Windows SAPI"""
         try:
+            # Initialize COM for this thread
+            import pythoncom
+            pythoncom.CoInitialize()
+            
             # Create SAPI speaker
             self.speaker = win32com.client.Dispatch("SAPI.SpVoice")
             
@@ -58,19 +62,17 @@ class ActionLayer:
                     self.stop_requested = False
                     self.current_speech = text
                     
-                    # Speak with interrupt check
-                    # Use SPF_ASYNC flag to allow interruption
-                    self.speaker.Speak(text, 1)  # 1 = SVSFlagsAsync
-                    
-                    # Wait for speech to complete or be interrupted
-                    while self.speaker.Status.RunningState == 2:  # 2 = SRSEIsSpeaking
-                        if self.stop_requested:
-                            self.speaker.Speak("", 3)  # 3 = SVSFPurgeBeforeSpeak | SVSFlagsAsync
-                            break
-                        time.sleep(0.1)
+                    # Speak synchronously (wait for completion)
+                    # Use 0 flag for synchronous speech
+                    self.speaker.Speak(text, 0)  # 0 = SVSFDefault (synchronous)
                     
                     self.speaking = False
                     self.current_speech = None
+                    
+                    # Reset avatar to idle after speech completes
+                    if self.avatar:
+                        time.sleep(0.3)  # Small delay for smooth animation
+                        self.avatar.set_state('idle')
                     
                     if not self.stop_requested:
                         print("✅ Finished speaking")
@@ -81,6 +83,8 @@ class ActionLayer:
                     print(f"TTS error in worker: {e}")
                     self.speaking = False
                     self.current_speech = None
+                    if self.avatar:
+                        self.avatar.set_state('idle')
         except Exception as e:
             print(f"TTS worker initialization error: {e}")
     
@@ -95,7 +99,7 @@ class ActionLayer:
                     pass
     
     def execute(self, response):
-        """Execute AI action - speak and animate"""
+        """Execute AI action - speak and animate (non-blocking)"""
         if not SAPI_AVAILABLE:
             return
         
@@ -109,10 +113,12 @@ class ActionLayer:
             self.avatar.set_emotion(emotion)
             self.avatar.set_state('speaking')
         
-        # Queue speech for TTS worker
+        # Queue speech for TTS worker (non-blocking)
         self.tts_queue.put(text)
         
-        # TODO: Trigger avatar animation
+        # DON'T wait - return immediately so main loop can continue
+        # The TTS worker will handle speech in background
+        # Avatar state will be reset by a separate thread
     
     def set_avatar(self, avatar):
         """Set reference to avatar window"""
