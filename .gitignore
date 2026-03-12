@@ -11,7 +11,16 @@ memory/storage.json
 memory/*.backup
 memory/*.tmp
 memory/*.corrupted.backup
+memory/patterns.json
+memory/preferences.json
+memory/strategies.json
+memory/tasks.json
+memory/reflection_reports/
 *.log
 .DS_Store
 .kiro/
 Allium企划/
+ren_pro_en/
+models/
+test_*.py
+main_simple.py
