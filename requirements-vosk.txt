@@ -1,0 +1,2 @@
+# Vosk offline speech recognition (faster, more reliable than Google API)
+vosk==0.3.45
