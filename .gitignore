@@ -6,7 +6,6 @@ __pycache__/
 env/
 venv/
 .env
-config.json
 memory/storage.json
 memory/*.backup
 memory/*.tmp

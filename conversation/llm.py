@@ -5,6 +5,11 @@ from datetime import datetime
 from knowledge.web_search import WebSearchEngine
 from knowledge.advanced_search import AdvancedSearchEngine
 from knowledge.reasoning import ReasoningEngine
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 class ConversationEngine:
     def __init__(self, config):
@@ -19,7 +24,7 @@ class ConversationEngine:
         
         # Groq settings (cloud, quality)
         self.groq_endpoint = config['api'].get('groq_endpoint', 'https://api.groq.com/openai/v1/chat/completions')
-        self.groq_api_key = config['api'].get('groq_api_key', '')
+        self.groq_api_key = os.getenv('GROQ_API_KEY') or config['api'].get('groq_api_key', '')
         self.groq_model = config['api'].get('groq_model', 'llama-3.1-8b-instant')
         
         # Legacy support

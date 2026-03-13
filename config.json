@@ -1,0 +1,82 @@
+{
+  "api": {
+    "llm_provider": "groq",
+    "ollama_endpoint": "http://localhost:11434/api/generate",
+    "ollama_model": "llama3.2:1b",
+    "groq_endpoint": "https://api.groq.com/openai/v1/chat/completions",
+    "groq_api_key": "YOUR_GROQ_API_KEY",
+    "groq_model": "llama-3.1-8b-instant",
+    "tts_provider": "local",
+    "fast_model": "llama-3.1-8b-instant",
+    "standard_model": "llama-3.3-70b-versatile",
+    "use_fast_model_for_casual": true
+  },
+  "perception": {
+    "camera_index": 0,
+    "face_detection_interval": 1.0,
+    "presence_timeout": 30,
+    "speech_recognition": "vosk",
+    "vosk_model_path": "models/vosk-model-en-large"
+  },
+  "personality": {
+    "name": "KD6",
+    "traits": ["friendly", "calm", "empathetic", "curious", "supportive"],
+    "voice_style": "warm"
+  },
+  "decision": {
+    "greeting_enabled": true,
+    "proactive_enabled": false,
+    "idle_threshold": 300
+  },
+  "avatar": {
+    "enabled": true,
+    "model_type": "live2d",
+    "model_path": "Allium企划/ariu/ariu.model3.json",
+    "preview_image": "Allium企划/ariu/ariu.png",
+    "window_width": 800,
+    "window_height": 600,
+    "scale": 1.0,
+    "use_vtube_studio": true
+  },
+  "vtube_studio": {
+    "host": "localhost",
+    "port": 8001
+  },
+  "emotion_detection": {
+    "model_path": "models/emotion_model.xml",
+    "confidence_threshold": 0.5,
+    "smoothing_frames": 3
+  },
+  "proactive_conversation": {
+    "min_interval_seconds": 600,
+    "max_daily_proactive": 10,
+    "suppress_in_meeting": true
+  },
+  "learning": {
+    "min_interactions_for_patterns": 10,
+    "preference_confidence_threshold": 0.6,
+    "adaptation_evaluation_days": 7
+  },
+  "reflection": {
+    "idle_reflection_minutes": 30,
+    "deep_reflection_hour": 3,
+    "effectiveness_window_days": 7
+  },
+  "automation": {
+    "enabled": true,
+    "browser_path": "chrome",
+    "task_reminders_enabled": true,
+    "check_reminders_interval": 60,
+    "youtube_click_x_percent": 0.25,
+    "youtube_click_y_percent": 0.30,
+    "youtube_load_delay": 4
+  },
+  "knowledge": {
+    "web_search_enabled": true,
+    "advanced_search_enabled": true,
+    "search_timeout": 5,
+    "max_search_results": 3,
+    "cache_duration_hours": 24,
+    "reasoning_enabled": true
+  }
+}
