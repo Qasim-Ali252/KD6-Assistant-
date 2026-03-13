@@ -16,7 +16,8 @@
     "face_detection_interval": 1.0,
     "presence_timeout": 30,
     "speech_recognition": "vosk",
-    "vosk_model_path": "models/vosk-model-en-large"
+    "vosk_model_path": "models/vosk-model-en-large",
+    "microphone_device_index": 1
   },
   "personality": {
     "name": "KD6",

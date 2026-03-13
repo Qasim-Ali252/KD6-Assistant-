@@ -28,6 +28,9 @@ class ActionLayer:
         self.tts_thread = threading.Thread(target=self._tts_worker, daemon=True)
         self.tts_thread.start()
         print("TTS worker thread started")
+    def set_microphone(self, microphone):
+        """Set reference to microphone for pause/resume during speech"""
+        self._microphone = microphone
     
     def _tts_worker(self):
         """Dedicated TTS worker thread using Windows SAPI"""
@@ -62,12 +65,20 @@ class ActionLayer:
                     self.stop_requested = False
                     self.current_speech = text
                     
+                    # Notify microphone to pause listening
+                    if hasattr(self, '_microphone') and self._microphone:
+                        self._microphone.pause_listening()
+                    
                     # Speak synchronously (wait for completion)
                     # Use 0 flag for synchronous speech
                     self.speaker.Speak(text, 0)  # 0 = SVSFDefault (synchronous)
                     
                     self.speaking = False
                     self.current_speech = None
+                    
+                    # Resume microphone listening
+                    if hasattr(self, '_microphone') and self._microphone:
+                        self._microphone.resume_listening()
                     
                     # Reset avatar to idle after speech completes
                     if self.avatar:
@@ -123,6 +134,10 @@ class ActionLayer:
     def set_avatar(self, avatar):
         """Set reference to avatar window"""
         self.avatar = avatar
+    
+    def set_microphone(self, microphone):
+        """Set reference to microphone for pause/resume during speech"""
+        self._microphone = microphone
     
     def cleanup(self):
         if SAPI_AVAILABLE:

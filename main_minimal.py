@@ -31,7 +31,9 @@ class MinimalKD6:
             self.avatar = AvatarWindow(self.config)
             self.action_layer.set_avatar(self.avatar)
         
+        # Connect microphone and action layer
         self.microphone.set_action_layer(self.action_layer)
+        self.action_layer.set_microphone(self.microphone)
         self.microphone.start_listening()
         
         print("✓ Minimal KD6 ready")
@@ -54,10 +56,13 @@ class MinimalKD6:
                 speech = self.microphone.get_latest_speech()
                 
                 if speech:
+                    start_time = time.time()
                     print(f"⚡ Processing: {speech}")
                     
                     # Check for automation commands FIRST
+                    t1 = time.time()
                     command_type, parameters = self.command_executor.parse_intent(speech)
+                    print(f"⏱️ Command parsing: {(time.time() - t1)*1000:.0f}ms")
                     
                     if command_type == 'cancel':
                         if self.action_layer.speaking:
@@ -89,6 +94,7 @@ class MinimalKD6:
                     
                     # Regular conversation
                     # Minimal context
+                    t2 = time.time()
                     context = {
                         'user_speech': speech,
                         'time': datetime.now().strftime('%H:%M'),
@@ -102,8 +108,10 @@ class MinimalKD6:
                     
                     # Minimal emotion
                     emotion = {'emotion': 'neutral', 'intensity': 0.5}
+                    print(f"⏱️ Context building: {(time.time() - t2)*1000:.0f}ms")
                     
                     # Generate response
+                    t3 = time.time()
                     response = self.conversation.generate(
                         context=context,
                         emotion=emotion,
@@ -113,9 +121,14 @@ class MinimalKD6:
                         preference_profile=None,
                         activity=None
                     )
+                    print(f"⏱️ LLM generation: {(time.time() - t3)*1000:.0f}ms")
                     
                     # Speak
+                    t4 = time.time()
                     self.action_layer.execute(response)
+                    print(f"⏱️ TTS queue: {(time.time() - t4)*1000:.0f}ms")
+                    
+                    print(f"⏱️ TOTAL: {(time.time() - start_time)*1000:.0f}ms")
                 
                 time.sleep(0.01)  # Very fast loop
                 
