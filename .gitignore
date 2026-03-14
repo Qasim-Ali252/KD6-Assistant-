@@ -18,6 +18,13 @@ memory/reflection_reports/
 *.log
 .DS_Store
 .kiro/
+/models/vosk-model-en-large/
+/models/*/
+*.fst
+*.mdl
+*.carpa
+*.raw
+
 Allium企划/
 ren_pro_en/
 models/

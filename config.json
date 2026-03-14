@@ -4,7 +4,7 @@
     "ollama_endpoint": "http://localhost:11434/api/generate",
     "ollama_model": "llama3.2:1b",
     "groq_endpoint": "https://api.groq.com/openai/v1/chat/completions",
-    "groq_api_key": "YOUR_GROQ_API_KEY",
+    "groq_api_key": "GROQ_API_KEY",
     "groq_model": "llama-3.1-8b-instant",
     "tts_provider": "local",
     "fast_model": "llama-3.1-8b-instant",
@@ -15,9 +15,11 @@
     "camera_index": 0,
     "face_detection_interval": 1.0,
     "presence_timeout": 30,
-    "speech_recognition": "vosk",
+    "speech_recognition": "whisper",
     "vosk_model_path": "models/vosk-model-en-large",
-    "microphone_device_index": 1
+    "microphone_device_index": 1,
+    "whisper_chunk_seconds": 4,
+    "silence_threshold": 800
   },
   "personality": {
     "name": "KD6",
@@ -30,7 +32,7 @@
     "idle_threshold": 300
   },
   "avatar": {
-    "enabled": true,
+    "enabled": false,
     "model_type": "live2d",
     "model_path": "Allium企划/ariu/ariu.model3.json",
     "preview_image": "Allium企划/ariu/ariu.png",

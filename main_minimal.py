@@ -4,13 +4,31 @@ No memory, no emotion, no reflection - just instant responses
 """
 import time
 from datetime import datetime
-from perception.microphone_vosk import MicrophoneInputVosk
 from conversation.llm import ConversationEngine
 from action.output import ActionLayer
 from avatar.window import AvatarWindow
 from personality.layer import PersonalityLayer
 from automation.command_executor import CommandExecutor
 import json
+
+# Load .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed, env vars must be set manually
+
+def load_microphone(config):
+    """Load microphone based on speech_recognition setting in config"""
+    engine = config.get('perception', {}).get('speech_recognition', 'vosk')
+    if engine == 'whisper':
+        from perception.microphone_whisper import MicrophoneInputWhisper
+        print("🎙 Using Groq Whisper speech recognition")
+        return MicrophoneInputWhisper(config)
+    else:
+        from perception.microphone_vosk import MicrophoneInputVosk
+        print("🎙 Using Vosk speech recognition")
+        return MicrophoneInputVosk(config)
 
 class MinimalKD6:
     def __init__(self):
@@ -20,7 +38,7 @@ class MinimalKD6:
             self.config = json.load(f)
         
         # Only essential components
-        self.microphone = MicrophoneInputVosk(self.config)
+        self.microphone = load_microphone(self.config)
         self.conversation = ConversationEngine(self.config)
         self.action_layer = ActionLayer(self.config)
         self.personality = PersonalityLayer(self.config)

@@ -196,8 +196,36 @@ class MicrophoneInputVosk:
             'elo': 'hello',
             'helo': 'hello',
             'hay': 'hey',
+
+            # App name corrections
+            'what sap': 'whatsapp',
+            'what sup': 'whatsapp',
+            'what zap': 'whatsapp',
+            'watts app': 'whatsapp',
+            'watsapp': 'whatsapp',
+            'vs code': 'vscode',
+            'the s code': 'vscode',
+            'be s code': 'vscode',
+            'visual studio code': 'vscode',
+            'disco': 'discord',
+            'disc cord': 'discord',
+            'spot if i': 'spotify',
+            'spot a fly': 'spotify',
+            'you tube': 'youtube',
+            'you chip': 'youtube',
+            'chrome book': 'chrome',
+            'tele gram': 'telegram',
+            'out look': 'outlook',
+            'power point': 'powerpoint',
             
-            # Add more corrections as you discover them
+            # Command corrections
+            'oh pen': 'open',
+            'lunch': 'launch',
+            'star': 'start',
+            'clothes': 'close',
+            'plays': 'play',
+            'search for': 'search',
+            'look up': 'search',
         }
         
         text_lower = text.lower()

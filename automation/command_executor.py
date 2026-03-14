@@ -85,6 +85,41 @@ class CommandExecutor:
                 return self._search_files(parameters)
             elif command_type == 'minimize_windows':
                 return self._minimize_windows(parameters)
+            # New commands
+            elif command_type == 'close_application':
+                return self._close_application(parameters)
+            elif command_type == 'close_window':
+                return self._close_window(parameters)
+            elif command_type == 'close_tab':
+                return self._close_tab(parameters)
+            elif command_type == 'open_folder':
+                return self._open_folder(parameters)
+            elif command_type == 'open_file':
+                return self._open_file(parameters)
+            elif command_type == 'search_and_open':
+                return self._search_and_open(parameters)
+            elif command_type == 'wifi_on':
+                return self.system_control.toggle_wifi(True)
+            elif command_type == 'wifi_off':
+                return self.system_control.toggle_wifi(False)
+            elif command_type == 'bluetooth_on':
+                return self.system_control.toggle_bluetooth(True)
+            elif command_type == 'bluetooth_off':
+                return self.system_control.toggle_bluetooth(False)
+            elif command_type == 'open_settings':
+                return self.system_control.open_settings(parameters.get('page', ''))
+            elif command_type == 'screenshot':
+                return self.system_control.take_screenshot()
+            elif command_type == 'battery_status':
+                return self.system_control.get_battery_status()
+            elif command_type == 'empty_recycle_bin':
+                return self.system_control.empty_recycle_bin()
+            elif command_type == 'new_tab':
+                return self.system_control.new_browser_tab()
+            elif command_type == 'maximize_window':
+                return self.system_control.maximize_window()
+            elif command_type == 'switch_window':
+                return self.system_control.switch_window()
             
             else:
                 return {'success': False, 'message': f'Unknown command: {command_type}'}
@@ -337,6 +372,17 @@ class CommandExecutor:
                 return ('complete_task', {'title': title})
         
         # System control patterns - HIGH PRIORITY
+        # Close application
+        if any(word in speech_lower for word in ['close', 'quit', 'exit', 'kill']):
+            if any(w in speech_lower for w in ['tab', 'tabs']):
+                return ('close_tab', {})
+            if any(w in speech_lower for w in ['window', 'this']):
+                return ('close_window', {})
+            app_name = self._extract_app_name(user_speech)
+            if app_name:
+                return ('close_application', {'app_name': app_name})
+            return ('close_window', {})
+
         # Application opening
         if any(word in speech_lower for word in ['open', 'launch', 'start', 'run']) and \
            not any(domain in speech_lower for domain in ['.com', '.org', '.net', 'website', 'youtube']):
@@ -409,6 +455,96 @@ class CommandExecutor:
         if any(phrase in speech_lower for phrase in ['minimize all', 'show desktop', 'minimize windows']):
             self.waiting_for_query = False
             return ('minimize_windows', {})
+
+        if any(phrase in speech_lower for phrase in ['maximize', 'full screen', 'fullscreen']):
+            return ('maximize_window', {})
+
+        if any(phrase in speech_lower for phrase in ['switch window', 'next window', 'alt tab']):
+            return ('switch_window', {})
+
+        if any(phrase in speech_lower for phrase in ['new tab', 'open tab', 'open new tab']):
+            return ('new_tab', {})
+
+        # Screenshot
+        if any(phrase in speech_lower for phrase in ['screenshot', 'take screenshot', 'capture screen', 'screen capture']):
+            return ('screenshot', {})
+
+        # Battery
+        if any(phrase in speech_lower for phrase in ['battery', 'battery status', 'how much battery', 'battery level']):
+            return ('battery_status', {})
+
+        # Recycle bin
+        if any(phrase in speech_lower for phrase in ['empty recycle bin', 'clear recycle bin', 'empty trash']):
+            return ('empty_recycle_bin', {})
+
+        # WiFi
+        if 'wifi' in speech_lower or 'wi-fi' in speech_lower or 'wireless' in speech_lower:
+            if any(w in speech_lower for w in ['on', 'enable', 'connect', 'turn on']):
+                return ('wifi_on', {})
+            elif any(w in speech_lower for w in ['off', 'disable', 'disconnect', 'turn off']):
+                return ('wifi_off', {})
+            return ('open_settings', {'page': 'wifi'})
+
+        # Bluetooth
+        if 'bluetooth' in speech_lower:
+            if any(w in speech_lower for w in ['on', 'enable', 'turn on']):
+                return ('bluetooth_on', {})
+            elif any(w in speech_lower for w in ['off', 'disable', 'turn off']):
+                return ('bluetooth_off', {})
+            return ('open_settings', {'page': 'bluetooth'})
+
+        # Settings pages
+        settings_map = {
+            'display settings': 'display', 'screen settings': 'display',
+            'sound settings': 'sound', 'audio settings': 'sound',
+            'notification settings': 'notifications',
+            'battery settings': 'battery', 'power settings': 'battery',
+            'storage settings': 'storage', 'disk settings': 'storage',
+            'app settings': 'apps', 'application settings': 'apps',
+            'startup settings': 'startup', 'startup apps': 'startup',
+            'privacy settings': 'privacy',
+            'windows update': 'update', 'check for updates': 'update',
+            'account settings': 'accounts',
+            'time settings': 'time', 'date settings': 'time',
+            'language settings': 'language',
+            'mouse settings': 'mouse', 'touchpad settings': 'mouse',
+            'keyboard settings': 'keyboard',
+            'camera settings': 'camera',
+            'microphone settings': 'microphone',
+            'vpn settings': 'vpn',
+            'airplane mode': 'airplane',
+            'hotspot': 'hotspot', 'mobile hotspot': 'hotspot',
+            'night light': 'night light',
+            'theme settings': 'themes', 'wallpaper': 'themes',
+            'taskbar settings': 'taskbar',
+            'default apps': 'default apps',
+        }
+        for phrase, page in settings_map.items():
+            if phrase in speech_lower:
+                return ('open_settings', {'page': page})
+
+        if 'settings' in speech_lower:
+            return ('open_settings', {'page': ''})
+
+        # Open folder / drive
+        folder_keywords = ['open folder', 'go to folder', 'open drive', 'open downloads',
+                           'open desktop', 'open documents', 'open pictures', 'open music',
+                           'open videos', 'open d drive', 'open c drive', 'open e drive',
+                           'show downloads', 'show desktop folder', 'file explorer']
+        for kw in folder_keywords:
+            if kw in speech_lower:
+                path = speech_lower.replace('open folder', '').replace('go to folder', '') \
+                                   .replace('open drive', '').replace('open', '') \
+                                   .replace('show', '').replace('go to', '').strip()
+                return ('open_folder', {'path': path if path else 'this pc'})
+
+        # Find and open file
+        if any(phrase in speech_lower for phrase in ['find and open', 'search and open', 'open file', 'find file']):
+            query = speech_lower
+            for phrase in ['find and open', 'search and open', 'open file', 'find file']:
+                query = query.replace(phrase, '').strip()
+            if query:
+                return ('search_and_open', {'query': query})
         
         # Website opening patterns - MEDIUM PRIORITY
         if 'open' in speech_lower and any(domain in speech_lower for domain in ['.com', '.org', '.net', 'website']):
@@ -628,6 +764,31 @@ class CommandExecutor:
     def _minimize_windows(self, params: dict) -> dict:
         """Minimize all windows"""
         return self.system_control.minimize_all_windows()
+
+    def _close_application(self, params: dict) -> dict:
+        app_name = params.get('app_name', '')
+        if not app_name:
+            return self.system_control.close_active_window()
+        return self.system_control.close_application(app_name)
+
+    def _close_window(self, params: dict) -> dict:
+        return self.system_control.close_active_window()
+
+    def _close_tab(self, params: dict) -> dict:
+        return self.system_control.close_active_tab()
+
+    def _open_folder(self, params: dict) -> dict:
+        path = params.get('path', '')
+        return self.system_control.open_folder(path)
+
+    def _open_file(self, params: dict) -> dict:
+        filepath = params.get('filepath', '')
+        return self.system_control.open_file(filepath)
+
+    def _search_and_open(self, params: dict) -> dict:
+        query = params.get('query', '')
+        drives = params.get('drives', None)
+        return self.system_control.search_and_open(query, drives)
 
     
     def _extract_app_name(self, speech: str) -> str:
